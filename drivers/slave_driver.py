@@ -9,6 +9,7 @@ class DriverSlave(DriverBase):
     
     def __init__(self, num, pixmap=None, pixheights=None):
         """
+        num is number of pixels
         pixmap is list of size num with values in range of pixels in master LED
           if None specified becomes range(num)
         pixheights is list of size num with heights
