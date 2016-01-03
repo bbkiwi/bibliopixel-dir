@@ -478,6 +478,13 @@ class MasterAnimation(BaseMatrixAnim):
         self._idlelist = []
         self.timedata = [[] for _  in animcopies] # [[]] * k NOT define k different lists!
         self._led.pixheights = [0] * self._led.numLEDs
+        
+    #overriding to handle all the animations
+    def stopThread(self, wait = False):
+        for w, f in self._animcopies:
+            w._stopEvent.set()
+        super(MasterAnimation, self).stopThread(wait)
+
 
     def preRun(self, amt=1): 
         super(MasterAnimation, self).preRun(amt)
@@ -487,7 +494,7 @@ class MasterAnimation(BaseMatrixAnim):
         #print "In preRUN THREADS: " + ",".join([re.sub('<class |,|bibliopixel.\w*.|>', '', str(s.__class__)) for s in threading.enumerate()])
         	
     def preStep(self, amt=1):
-        self.animComplete = all([a.stopped() for a, f in self._animcopies])
+        # self.animComplete = all([a.stopped() for a, f in self._animcopies])
         #print 'prestep {}'.format(self._step)
         # only step the master thread when something from ledcopies
         #  has been done i.e. its event _wait must be false (I THINK)
@@ -495,8 +502,9 @@ class MasterAnimation(BaseMatrixAnim):
         self._idlelist = [True] # to insure goes thru while loop at least once
         while all(self._idlelist):
             self._idlelist = [not ledcopy.driver[0]._updatenow.isSet() for ledcopy in self._ledcopies]
-            if self._stopEvent.isSet() | self.animComplete:
+            if self._stopEvent.isSet() | all([a.stopped() for a, f in self._animcopies]):
                 self.animComplete = True
+                #print all([a.stopped() for a, f in self._animcopies])
                 #print 'breaking out'
                 break
 #        
@@ -504,7 +512,9 @@ class MasterAnimation(BaseMatrixAnim):
         # clear the ones found in preStep
         activewormind = [i for i, x in enumerate(self._idlelist) if x == False]
         [self._ledcopies[i].driver[0]._updatenow.clear() for i in activewormind]
- 
+        #self.animComplete = all([a.stopped() for a, f in self._animcopies])
+        #print "In postStep animComplete {}".format(self.animComplete)
+
     def step(self, amt=1):
         """
         combines the buffers from the slave led's
@@ -533,12 +543,25 @@ class MasterAnimation(BaseMatrixAnim):
                         self._led.buffer[3*pix + i] = ledcopy.buffer[3*pixind + i]
                         self._led.pixheights[pix] = ledcopy.driver[0].pixheights[pixind]    
         self._step += 1
-        self.animComplete = all([a.stopped() for a, f in self._animcopies])
 
         
     def run(self, amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = True, max_cycles = 0, threaded = True, joinThread = False, callback=None):
         # self.fps = fps
         # self.untilComplete = untilComplete
         super(MasterAnimation, self).run(amt = 1, fps=fps, sleep=None, max_steps = max_steps, untilComplete = untilComplete, max_cycles = 0, threaded = True, joinThread = joinThread, callback=callback)
-   
+        while not self.animComplete:
+            pass
+        #print "from MasterAnimation.run {}".format(threading.enumerate())
+        self.stopThread(True)
+        # wait till all animimations are stopped        
+        #while not all([w.stopped() for w, f in self._animcopies]):
+        #    pass   
+        #self._led.stopUpdateThreads()  
+        #print "from MasterAnimation.run {}".format(threading.enumerate())
+
+        [w._led.stopUpdateThreads() for w, f in self._animcopies]
+        #print "from MasterAnimation.run {}".format(threading.enumerate())
+
+
+ 
 
