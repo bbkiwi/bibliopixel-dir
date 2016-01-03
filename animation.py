@@ -548,20 +548,8 @@ class MasterAnimation(BaseMatrixAnim):
     def run(self, amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = True, max_cycles = 0, threaded = True, joinThread = False, callback=None):
         # self.fps = fps
         # self.untilComplete = untilComplete
-        super(MasterAnimation, self).run(amt = 1, fps=fps, sleep=None, max_steps = max_steps, untilComplete = untilComplete, max_cycles = 0, threaded = True, joinThread = joinThread, callback=callback)
-        while not self.animComplete:
-            pass
-        #print "from MasterAnimation.run {}".format(threading.enumerate())
-        self.stopThread(True)
-        # wait till all animimations are stopped        
-        #while not all([w.stopped() for w, f in self._animcopies]):
-        #    pass   
-        #self._led.stopUpdateThreads()  
-        #print "from MasterAnimation.run {}".format(threading.enumerate())
-
-        [w._led.stopUpdateThreads() for w, f in self._animcopies]
-        #print "from MasterAnimation.run {}".format(threading.enumerate())
-
-
- 
+        super(MasterAnimation, self).run(amt = 1, fps=fps, sleep=None, max_steps = max_steps, untilComplete = untilComplete, max_cycles = 0, threaded = threaded, joinThread = joinThread, callback=callback)
+#        while not self.animComplete:
+#            pass
+        
 
