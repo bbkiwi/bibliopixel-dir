@@ -64,7 +64,8 @@ class LEDBase(object):
 
 
         self.buffer = [0 for x in range(self.bufByteCount)]
-
+        self.unscaledbuffer = self.buffer
+ 
         self.masterBrightness = 255
 
         self._frameGenTime = 0
@@ -90,19 +91,19 @@ class LEDBase(object):
     def _get_base(self, pixel):
         if(pixel < 0 or pixel > self.lastIndex):
             return (0,0,0) #don't go out of bounds
-
-        return (self.buffer[pixel*3 + 0], self.buffer[pixel*3 + 1], self.buffer[pixel*3 + 2])
+        return (self.unscaledbuffer[pixel*3 + 0], self.unscaledbuffer[pixel*3 + 1], self.unscaledbuffer[pixel*3 + 2])
 
     def _set_base(self, pixel, color):
         try:
             if pixel < 0 or pixel > self._last_i: raise IndexError()
-
             if self.masterBrightness < 255:
+                self.unscaledbuffer[pixel*3:(pixel*3)+3] = color
                 self.buffer[pixel*3 + 0] = (color[0] * self.masterBrightness) >> 8
                 self.buffer[pixel*3 + 1] = (color[1] * self.masterBrightness) >> 8
                 self.buffer[pixel*3 + 2] = (color[2] * self.masterBrightness) >> 8
             else:
                 self.buffer[pixel*3:(pixel*3)+3] = color
+                # and self.unscaledbuffer is the same as self.buffer
         except IndexError:
             pass
 
@@ -140,18 +141,23 @@ class LEDBase(object):
     #use with caution!
     def setBuffer(self, buf):
         """Use with extreme caution!
-        Directly sets the internal buffer and bypasses all brightness and rotation control.
+        Directly sets the internal buffer and bypasses rotation control.
+        masterBrightness will be applied however but takes some time
         buf must also be in the exact format required by the display type.
         """
         if len(buf) != self.bufByteCount:
             raise ValueError("For this display type and {0} LEDs, buffer must have {1} bytes but has {2}".format(self.bufByteCount/3, self.bufByteCount, len(buf)))
-        self.buffer = buf
+        self.unscaledbuffer = buf
+        # if scaling recalculate self.unscaledbuffer
+        if not self.buffer is self.unscaledbuffer:
+            self.buffer = [(c * self.masterBrightness) >> 8 for c in self.unscaledbuffer]
+ 
 
     #Set the master brightness for the LEDs 0 - 255
     def setMasterBrightness(self, bright):
         """Sets the master brightness scaling, 0 - 255
-
         If the driver supports it the brightness will be sent to the receiver directly.
+        If
         """
         if(bright > 255 or bright < 0):
             raise ValueError('Brightness must be between 0 and 255')
@@ -161,13 +167,18 @@ class LEDBase(object):
                 result = False
                 break
 
-        #all or nothing, set them all back if False
+        # all or nothing, set them all back if False and use scaling 
+        # if bright is less than 255
         if not result:
             for d in self.driver:
                 d.setMasterBrightness(255)
             self.masterBrightness = bright
+            # make self.unscaledbuffer a different list from self.buffer
+            if bright != 255:
+                self.unscaledbuffer = [0 for x in range(self.bufByteCount)]
         else:
             self.masterBrightness = 255
+            # and self.unscaledbuffer remains the same list as self.buffer
 
     #Set single pixel to RGB value
     def setRGB(self, pixel, r, g, b):
@@ -190,8 +201,12 @@ class LEDBase(object):
        self._resetBuffer()
 
     def _resetBuffer(self):
-        self.buffer = [0 for x in range(self.bufByteCount)]
-
+        """
+        resets to all zero without changing the list id
+        """
+        for i in range(self.bufByteCount):
+            self.buffer[i] = 0
+ 
     #Fill the strand (or a subset) with a single color using a Color object
     def fill(self, color, start=0, end=-1):
         """Fill the entire strip with RGB color tuple"""

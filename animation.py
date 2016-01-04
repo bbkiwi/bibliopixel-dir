@@ -494,11 +494,7 @@ class MasterAnimation(BaseMatrixAnim):
         #print "In preRUN THREADS: " + ",".join([re.sub('<class |,|bibliopixel.\w*.|>', '', str(s.__class__)) for s in threading.enumerate()])
         	
     def preStep(self, amt=1):
-        # self.animComplete = all([a.stopped() for a, f in self._animcopies])
-        #print 'prestep {}'.format(self._step)
         # only step the master thread when something from ledcopies
-        #  has been done i.e. its event _wait must be false (I THINK)
-        # TODO is this good code???? or is there a better way to block
         self._idlelist = [True] # to insure goes thru while loop at least once
         while all(self._idlelist):
             self._idlelist = [not ledcopy.driver[0]._updatenow.isSet() for ledcopy in self._ledcopies]
@@ -520,6 +516,8 @@ class MasterAnimation(BaseMatrixAnim):
         combines the buffers from the slave led's
         which then gets sent to led via update
         """
+        def xortuple(a, b):
+            return tuple(a[i] ^ b[i] for i in range(len(a)))
         # For checking if all the animations have their frames looked at
         #activewormind = [i for i, x in enumerate(self._idlelist) if x == False]
         #print "Worm {} at {:5g}".format(activewormind, 1000*(time.time() - starttime))
@@ -534,14 +532,12 @@ class MasterAnimation(BaseMatrixAnim):
             # use pixheights but assume all buffers same size
             # print ledcopy.driver[0].pixheights
             for pixind, pix in enumerate(ledcopy.driver[0].pixmap):
-            #for ledcopy in self._ledcopies:
                 if self._led.pixheights[pix] == ledcopy.driver[0].pixheights[pixind]:
-                    for i in range(3):
-                        self._led.buffer[3*pix + i] ^= ledcopy.buffer[3*pixind + i]
+                    self._led._set_base(pix, 
+                            xortuple(self._led._get_base(pix), ledcopy._get_base(pixind)))
                 elif self._led.pixheights[pix] < ledcopy.driver[0].pixheights[pixind]:
-                    for i in range(3):
-                        self._led.buffer[3*pix + i] = ledcopy.buffer[3*pixind + i]
-                        self._led.pixheights[pix] = ledcopy.driver[0].pixheights[pixind]    
+                    self._led._set_base(pix, ledcopy._get_base(pixind))
+                    self._led.pixheights[pix] = ledcopy.driver[0].pixheights[pixind]    
         self._step += 1
 
         
