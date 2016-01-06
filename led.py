@@ -3,8 +3,8 @@ import colors
 import time
 import math
 import font
-import time
 import threading
+
 
 class updateThread(threading.Thread):
 
@@ -12,8 +12,8 @@ class updateThread(threading.Thread):
         super(updateThread, self).__init__()
         self.setDaemon(True)
         self._stop = threading.Event()
-        self._wait = threading.Event() # set when ready and sending data to update driver
-        self._reading = threading.Event() # set when ready and during read data via setData
+        self._wait = threading.Event()  # set when ready and sending data to update driver
+        self._reading = threading.Event()  # set when ready and during read data via setData
         self._reading.set()
         self._data = []
         self._driver = driver
@@ -44,9 +44,10 @@ class updateThread(threading.Thread):
             self._wait.clear()
             self._reading.set()
 
+
 class LEDBase(object):
 
-    def __init__(self, driver, threadedUpdate, masterBrightness):
+    def __init__(self, driver, threadedUpdate, masterBrightness, masterBrightnessLimit):
         """Base LED class. Use LEDStrip or LEDMatrix instead!"""
         if not isinstance(driver, list):
             driver = [driver]
@@ -54,7 +55,7 @@ class LEDBase(object):
         self.driver = driver
         try:
             self.numLEDs
-        except AttributeError as e:
+        except AttributeError:
             self.numLEDs = 0
             for d in self.driver:
                 self.numLEDs += d.numLEDs
@@ -62,11 +63,12 @@ class LEDBase(object):
         self.bufByteCount = int(3 * self.numLEDs)
         self._last_i = self.lastIndex = self.numLEDs - 1
 
-
         self.buffer = [0 for x in range(self.bufByteCount)]
         self.unscaledbuffer = self.buffer
- 
-        self.masterBrightness = 255
+
+        self.__masterBrightnessLimit_ = masterBrightnessLimit
+        self.masterBrightness = masterBrightness
+        self.__scaleBrightness_ = 255
 
         self._frameGenTime = 0
         self._frameTotalTime = None
@@ -83,32 +85,36 @@ class LEDBase(object):
 
     def __enter__(self):
         return self
+
     def __exit__(self, type, value, traceback):
         pass
+
     def cleanup(self):
         return self.__exit__(None, None, None)
 
     def _get_base(self, pixel):
         if(pixel < 0 or pixel > self.lastIndex):
-            return (0,0,0) #don't go out of bounds
-        return (self.unscaledbuffer[pixel*3 + 0], self.unscaledbuffer[pixel*3 + 1], self.unscaledbuffer[pixel*3 + 2])
+            return (0, 0, 0)  # don't go out of bounds
+        return (self.unscaledbuffer[pixel*3 + 0],
+                self.unscaledbuffer[pixel*3 + 1],
+                self.unscaledbuffer[pixel*3 + 2])
 
     def _set_base(self, pixel, color):
         try:
             if pixel < 0 or pixel > self._last_i: raise IndexError()
-            if self.masterBrightness < 255:
+            if self.__scaleBrightness_ < 255:
                 self.unscaledbuffer[pixel*3:(pixel*3)+3] = color
-                self.buffer[pixel*3 + 0] = (color[0] * self.masterBrightness) >> 8
-                self.buffer[pixel*3 + 1] = (color[1] * self.masterBrightness) >> 8
-                self.buffer[pixel*3 + 2] = (color[2] * self.masterBrightness) >> 8
+                self.buffer[pixel*3 + 0] = (color[0] * self.__scaleBrightness_) >> 8
+                self.buffer[pixel*3 + 1] = (color[1] * self.__scaleBrightness_) >> 8
+                self.buffer[pixel*3 + 2] = (color[2] * self.__scaleBrightness_) >> 8
             else:
                 self.buffer[pixel*3:(pixel*3)+3] = color
                 # and self.unscaledbuffer is the same as self.buffer
         except IndexError:
             pass
 
-    # NOTE this stops the thread associated with the driver associated with the led
-    #  so if a later led has the same drivers this will stop those treads
+    # NOTE this stops the thread associated with the driver associated with
+    # the led so if a later led has the same drivers this will stop its threads
     def stopUpdateThreads(self):
         if self._threadedUpdate:
             for d in self.driver:
@@ -138,7 +144,7 @@ class LEDBase(object):
     def lastThreadedUpdate(self):
         return max([d.lastUpdate for d in self.driver])
 
-    #use with caution!
+    # use with caution!
     def setBuffer(self, buf):
         """Use with extreme caution!
         Directly sets the internal buffer and bypasses rotation control.
@@ -149,16 +155,30 @@ class LEDBase(object):
             raise ValueError("For this display type and {0} LEDs, buffer must have {1} bytes but has {2}".format(self.bufByteCount/3, self.bufByteCount, len(buf)))
         self.unscaledbuffer = buf
         # if scaling recalculate self.unscaledbuffer
-        if not self.buffer is self.unscaledbuffer:
-            self.buffer = [(c * self.masterBrightness) >> 8 for c in self.unscaledbuffer]
- 
+        if self.buffer is not self.unscaledbuffer:
+            self.buffer = [(c * self.__scaleBrightness_) >> 8 for c in self.unscaledbuffer]
 
-    #Set the master brightness for the LEDs 0 - 255
+    def changeBrightness(self, brightness):
+        self.setMasterBrightness(brightness) 
+        self.setBuffer(self.unscaledbuffer)
+
+
+    #Reset the master brightness for the LEDs to initialized value
+    def resetMasterBrightness(self):
+        self.setMasterBrightness(self.masterBrightness)
+
+    # Set the master brightness for the LEDs 0 - 255
     def setMasterBrightness(self, bright):
         """Sets the master brightness scaling, 0 - 255
-        If the driver supports it the brightness will be sent to the receiver directly.
-        If
+        If the driver supports it the brightness will be sent to the receiver
+        directly otherwise uses self.__scalebrightness_ which is used to 
+        scale values that go in self.buffer
         """
+        try:
+            assert bright <= self.__masterBrightnessLimit_
+        except AssertionError:
+            bright = self.__masterBrightnessLimit_
+            
         if(bright > 255 or bright < 0):
             raise ValueError('Brightness must be between 0 and 255')
         result = True
@@ -167,20 +187,21 @@ class LEDBase(object):
                 result = False
                 break
 
-        # all or nothing, set them all back if False and use scaling 
+        # all or nothing, set them all back if False and use scaling
         # if bright is less than 255
         if not result:
             for d in self.driver:
                 d.setMasterBrightness(255)
-            self.masterBrightness = bright
-            # make self.unscaledbuffer a different list from self.buffer
-            if bright != 255:
-                self.unscaledbuffer = [0 for x in range(self.bufByteCount)]
+            self.__scaleBrightness_ = bright
         else:
-            self.masterBrightness = 255
-            # and self.unscaledbuffer remains the same list as self.buffer
+            self.__scaleBrightness_ = 255
 
-    #Set single pixel to RGB value
+        if self.__scaleBrightness_ == 255:  # make both buffers same id
+            self.unscaledbuffer = self.buffer
+        else:  # self.unscaledbuffer made different id from self.buffer
+            self.unscaledbuffer = [v for v in self.unscaledbuffer]
+
+    # Set single pixel to RGB value
     def setRGB(self, pixel, r, g, b):
         """Set single pixel using individual RGB values instead of tuple"""
         color = (r, g, b)
@@ -191,14 +212,14 @@ class LEDBase(object):
         color = colors.hsv2rgb(hsv)
         self._set_base(pixel, color)
 
-    #turns off the desired pixel
+    # turns off the desired pixel
     def setOff(self, pixel):
         """Set single pixel off"""
         self._set_base(pixel, (0, 0, 0))
 
     def all_off(self):
-       """Set all pixels off"""
-       self._resetBuffer()
+        """Set all pixels off"""
+        self._resetBuffer()
 
     def _resetBuffer(self):
         """
@@ -206,31 +227,33 @@ class LEDBase(object):
         """
         for i in range(self.bufByteCount):
             self.buffer[i] = 0
- 
-    #Fill the strand (or a subset) with a single color using a Color object
+
+    # Fill the strand (or a subset) with a single color using a Color object
     def fill(self, color, start=0, end=-1):
         """Fill the entire strip with RGB color tuple"""
         if start < 0:
             start = 0
         if end < 0 or end > self.lastIndex:
             end = self.lastIndex
-        for led in range(start, end + 1): #since 0-index include end in range
+        for led in range(start, end + 1):  # since 0-index include end in range
             self._set_base(led, color)
 
-    #Fill the strand (or a subset) with a single color using RGB values
+    # Fill the strand (or a subset) with a single color using RGB values
     def fillRGB(self, r, g, b, start=0, end=-1):
-        """Fill entire strip by giving individual RGB values instead of tuple"""
+        """Fill entire strip giving individual RGB values instead of tuple"""
         self.fill((r, g, b), start, end)
 
-    #Fill the strand (or a subset) with a single color using HSV values
+    # Fill the strand (or a subset) with a single color using HSV values
     def fillHSV(self, hsv, start=0, end=-1):
         """Fill the entire strip with HSV color tuple"""
         self.fill(colors.hsv2rgb(hsv), start, end)
 
+
 class LEDStrip(LEDBase):
 
-    def __init__(self, driver, threadedUpdate = False, masterBrightness=255, pixelWidth=1):
-        super(LEDStrip, self).__init__(driver, threadedUpdate, masterBrightness)
+    def __init__(self, driver, threadedUpdate = False, masterBrightness=255, 
+                 pixelWidth=1, masterBrightnessLimit=255):
+        super(LEDStrip, self).__init__(driver, threadedUpdate, masterBrightness, masterBrightnessLimit)
 
         self.pixelWidth = pixelWidth
         if self.pixelWidth < 1 or self.pixelWidth > self.numLEDs:
@@ -325,7 +348,10 @@ class MultiMapBuilder():
 
 class LEDMatrix(LEDBase):
 
-    def __init__(self, driver, width = 0, height = 0, coordMap = None, rotation = MatrixRotation.ROTATE_0, vert_flip = False, serpentine = True, threadedUpdate = False, masterBrightness=255, pixelSize=(1,1)):
+    def __init__(self, driver, width = 0, height = 0, coordMap = None, 
+                 rotation = MatrixRotation.ROTATE_0, vert_flip = False, 
+                 serpentine = True, threadedUpdate = False, 
+                 masterBrightness=255, pixelSize=(1,1), masterBrightnessLimit=255):
         """Main class for matricies.
         driver - instance that inherits from DriverBase
         width - X axis size of matrix
@@ -334,7 +360,7 @@ class LEDMatrix(LEDBase):
         rotation - how to rotate when generating the map. Not used if coordMap specified
         vert_flip - flips the generated map along the Y axis. This along with rotation can achieve any orientation
         """
-        super(LEDMatrix, self).__init__(driver, threadedUpdate, masterBrightness)
+        super(LEDMatrix, self).__init__(driver, threadedUpdate, masterBrightness, masterBrightnessLimit)
 
         if width == 0 and height == 0:
             if len(self.driver) == 1:
@@ -771,10 +797,15 @@ class LEDMatrix(LEDBase):
 #Takes a matrix and displays it as individual columns over time
 class LEDPOV(LEDMatrix):
 
-    def __init__(self, driver, povHeight, width, rotation = MatrixRotation.ROTATE_0, vert_flip = False, threadedUpdate = False, masterBrightness=255):
+    def __init__(self, driver, povHeight, width, rotation = MatrixRotation.ROTATE_0,
+                 vert_flip = False, threadedUpdate = False, 
+                 masterBrightness=255, masterBrightnessLimit=255):
         self.numLEDs = povHeight * width
-
-        super(LEDPOV, self).__init__(driver, width, povHeight, None, rotation, vert_flip, threadedUpdate, masterBrightness)
+        # send keyword parameters as a few in LEDMatrix were skipped
+        super(LEDPOV, self).__init__(driver, width, povHeight, coordMap=None, 
+                rotation=rotation, vert_flip=vert_flip, 
+                threadedUpdate=threadedUpdate, masterBrightness=masterBrightness, 
+                masterBrightnessLimit=masterBrightnessLimit)
 
     #This is the magic. Overriding the normal update() method
     #It will automatically break up the frame into columns spread over frameTime (ms)
@@ -798,8 +829,8 @@ class LEDPOV(LEDMatrix):
 
 class LEDCircle(LEDBase):
 
-    def __init__(self, driver, rings, maxAngleDiff = 0, rotation = 0, threadedUpdate = False, masterBrightness=255):
-        super(LEDCircle, self).__init__(driver, threadedUpdate, masterBrightness)
+    def __init__(self, driver, rings, maxAngleDiff = 0, rotation = 0, threadedUpdate = False, masterBrightness=255, masterBrightnessLimit=255):
+        super(LEDCircle, self).__init__(driver, threadedUpdate, masterBrightness, masterBrightnessLimit)
         self.rings = rings
         self.maxAngleDiff = maxAngleDiff
         self._full_coords = False

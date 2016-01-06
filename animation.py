@@ -10,7 +10,8 @@ from util import d
 
 import threading
 
-class animThread(threading.Thread): 
+
+class animThread(threading.Thread):
     def __init__(self, anim, args):
         super(animThread, self).__init__()
         self.setDaemon(True)
@@ -21,6 +22,7 @@ class animThread(threading.Thread):
         log.logger.info("Starting thread...")
         self._anim._run(**self._args)
         log.logger.info("Thread Complete")
+
 
 class BaseAnimation(object):
     def __init__(self, led):
@@ -41,16 +43,19 @@ class BaseAnimation(object):
     def preRun(self, amt=1):
         self._led.all_off()
 
+    def postRun(self):
+        self._led.resetMasterBrightness()
+
     def preStep(self, amt=1):
         pass
 
     def postStep(self, amt=1):
         pass
 
-    def step(self, amt = 1):
+    def step(self, amt=1):
         raise RuntimeError("Base class step() called. This shouldn't happen")
 
-    def stopThread(self, wait = False):
+    def stopThread(self, wait=False):
         if self._thread:
             self._stopEvent.set()
             if wait:
@@ -64,7 +69,7 @@ class BaseAnimation(object):
 
     def __exit__(self, type, value, traceback):
         self._exit(type, value, traceback)
-        self.stopThread(wait = True)
+        self.stopThread(wait=True)
         self._led.all_off()
         self._led.update()
         self._led.waitForUpdate()
@@ -81,8 +86,8 @@ class BaseAnimation(object):
     def _run(self, amt, fps, sleep, max_steps, untilComplete, max_cycles):
         self.preRun()
 
-        #calculate sleep time base on desired Frames per Second
-        if fps != None:
+        # calculate sleep time base on desired Frames per Second
+        if fps is not None:
             sleep = int(1000 / fps)
 
         initSleep = sleep
@@ -92,7 +97,11 @@ class BaseAnimation(object):
         cycle_count = 0
         self.animComplete = False
 
-        while not self._stopEvent.isSet() and ((max_steps == 0 and not untilComplete) or (max_steps > 0 and cur_step < max_steps) or (max_steps == 0 and untilComplete and not self.animComplete)):
+        while not self._stopEvent.isSet() and (
+                 (max_steps == 0 and not untilComplete) or
+                 (max_steps > 0 and cur_step < max_steps) or
+                 (max_steps == 0 and untilComplete and not self.animComplete)):
+
             self._timeRef = self._msTime()
 
             start = self._msTime()
@@ -142,6 +151,8 @@ class BaseAnimation(object):
                 else:
                     time.sleep(t)
             cur_step += 1
+
+        self.postRun()
 
         if self._callback:
             self._callback(self)
@@ -462,7 +473,7 @@ class MatrixCalibrationTest(BaseMatrixAnim):
         self.animComplete = (i == (self.width-1))
 
         self._step += 1
-	
+
 class MasterAnimation(BaseMatrixAnim):
     """
     Takes copies of fake leds, combines using heights and mixing to fill and update
@@ -478,7 +489,7 @@ class MasterAnimation(BaseMatrixAnim):
         self._idlelist = []
         self.timedata = [[] for _  in animcopies] # [[]] * k NOT define k different lists!
         self._led.pixheights = [0] * self._led.numLEDs
-        
+
     #overriding to handle all the animations
     def stopThread(self, wait = False):
         for w, f in self._animcopies:
@@ -486,13 +497,13 @@ class MasterAnimation(BaseMatrixAnim):
         super(MasterAnimation, self).stopThread(wait)
 
 
-    def preRun(self, amt=1): 
+    def preRun(self, amt=1):
         super(MasterAnimation, self).preRun(amt)
         self.starttime = time.time()
         for w, f in self._animcopies:
             w.run(fps=f, max_steps=self._runtime * f, threaded = True)
         #print "In preRUN THREADS: " + ",".join([re.sub('<class |,|bibliopixel.\w*.|>', '', str(s.__class__)) for s in threading.enumerate()])
-        	
+
     def preStep(self, amt=1):
         # only step the master thread when something from ledcopies
         self._idlelist = [True] # to insure goes thru while loop at least once
@@ -503,7 +514,7 @@ class MasterAnimation(BaseMatrixAnim):
                 #print all([a.stopped() for a, f in self._animcopies])
                 #print 'breaking out'
                 break
-#        
+#
     def postStep(self, amt=1):
         # clear the ones found in preStep
         activewormind = [i for i, x in enumerate(self._idlelist) if x == False]
@@ -521,9 +532,9 @@ class MasterAnimation(BaseMatrixAnim):
         # For checking if all the animations have their frames looked at
         #activewormind = [i for i, x in enumerate(self._idlelist) if x == False]
         #print "Worm {} at {:5g}".format(activewormind, 1000*(time.time() - starttime))
-        # save times activated for each worm         
+        # save times activated for each worm
         [self.timedata[i].append(1000*(time.time() - self.starttime)) for i, x in enumerate(self._idlelist) if x == False]
-        
+
         #self._led.buffer = [0] * 480
         self._led.pixheights = [-10000] * self._led.numLEDs
         #print type(self._led.buffer)
@@ -533,19 +544,19 @@ class MasterAnimation(BaseMatrixAnim):
             # print ledcopy.driver[0].pixheights
             for pixind, pix in enumerate(ledcopy.driver[0].pixmap):
                 if self._led.pixheights[pix] == ledcopy.driver[0].pixheights[pixind]:
-                    self._led._set_base(pix, 
+                    self._led._set_base(pix,
                             xortuple(self._led._get_base(pix), ledcopy._get_base(pixind)))
                 elif self._led.pixheights[pix] < ledcopy.driver[0].pixheights[pixind]:
                     self._led._set_base(pix, ledcopy._get_base(pixind))
-                    self._led.pixheights[pix] = ledcopy.driver[0].pixheights[pixind]    
+                    self._led.pixheights[pix] = ledcopy.driver[0].pixheights[pixind]
         self._step += 1
 
-        
+
     def run(self, amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = True, max_cycles = 0, threaded = True, joinThread = False, callback=None):
         # self.fps = fps
         # self.untilComplete = untilComplete
         super(MasterAnimation, self).run(amt = 1, fps=fps, sleep=None, max_steps = max_steps, untilComplete = untilComplete, max_cycles = 0, threaded = threaded, joinThread = joinThread, callback=callback)
 #        while not self.animComplete:
 #            pass
-        
+
 
