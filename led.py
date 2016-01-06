@@ -154,8 +154,10 @@ class LEDBase(object):
         if len(buf) != self.bufByteCount:
             raise ValueError("For this display type and {0} LEDs, buffer must have {1} bytes but has {2}".format(self.bufByteCount/3, self.bufByteCount, len(buf)))
         self.unscaledbuffer = buf
-        # if scaling recalculate self.unscaledbuffer
-        if self.buffer is not self.unscaledbuffer:
+        
+        if self.__scaleBrightness_ == 255:
+            self.buffer = self.unscaledbuffer
+        else:    
             self.buffer = [(c * self.__scaleBrightness_) >> 8 for c in self.unscaledbuffer]
 
     def changeBrightness(self, brightness):
