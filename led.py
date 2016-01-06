@@ -99,6 +99,19 @@ class LEDBase(object):
                 self.unscaledbuffer[pixel*3 + 1],
                 self.unscaledbuffer[pixel*3 + 2])
 
+    def _get_push(self, pixel):
+        """
+        gets the value that actually will be pushed to driver
+        this is scaled value if drivers can't handle brightness control
+        otherwise same as unscaled buffer
+        """
+        # TODO could modifiy to return scaled in all cases
+        if(pixel < 0 or pixel > self.lastIndex):
+            return (0, 0, 0)  # don't go out of bounds
+        return (self.buffer[pixel*3 + 0],
+                self.buffer[pixel*3 + 1],
+                self.buffer[pixel*3 + 2])
+
     def _set_base(self, pixel, color):
         try:
             if pixel < 0 or pixel > self._last_i: raise IndexError()
@@ -183,6 +196,9 @@ class LEDBase(object):
 
         if(bright > 255 or bright < 0):
             raise ValueError('Brightness must be between 0 and 255')
+            
+        # TODO could move this testing to separate routine to use
+        # in init    
         result = True
         for d in self.driver:
             if(not d.setMasterBrightness(bright)):

@@ -545,9 +545,9 @@ class MasterAnimation(BaseMatrixAnim):
             for pixind, pix in enumerate(ledcopy.driver[0].pixmap):
                 if self._led.pixheights[pix] == ledcopy.driver[0].pixheights[pixind]:
                     self._led._set_base(pix,
-                            xortuple(self._led._get_base(pix), ledcopy._get_base(pixind)))
+                            xortuple(self._led._get_base(pix), ledcopy._get_push(pixind)))
                 elif self._led.pixheights[pix] < ledcopy.driver[0].pixheights[pixind]:
-                    self._led._set_base(pix, ledcopy._get_base(pixind))
+                    self._led._set_base(pix, ledcopy._get_push(pixind))
                     self._led.pixheights[pix] = ledcopy.driver[0].pixheights[pixind]
         self._step += 1
 
