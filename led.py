@@ -154,14 +154,14 @@ class LEDBase(object):
         if len(buf) != self.bufByteCount:
             raise ValueError("For this display type and {0} LEDs, buffer must have {1} bytes but has {2}".format(self.bufByteCount/3, self.bufByteCount, len(buf)))
         self.unscaledbuffer = buf
-        
+
         if self.__scaleBrightness_ == 255:
             self.buffer = self.unscaledbuffer
-        else:    
+        else:
             self.buffer = [(c * self.__scaleBrightness_) >> 8 for c in self.unscaledbuffer]
 
     def changeBrightness(self, brightness):
-        self.setMasterBrightness(brightness) 
+        self.setMasterBrightness(brightness)
         self.setBuffer(self.unscaledbuffer)
 
 
@@ -173,14 +173,14 @@ class LEDBase(object):
     def setMasterBrightness(self, bright):
         """Sets the master brightness scaling, 0 - 255
         If the driver supports it the brightness will be sent to the receiver
-        directly otherwise uses self.__scalebrightness_ which is used to 
+        directly otherwise uses self.__scalebrightness_ which is used to
         scale values that go in self.buffer
         """
         try:
             assert bright <= self.__masterBrightnessLimit_
         except AssertionError:
             bright = self.__masterBrightnessLimit_
-            
+
         if(bright > 255 or bright < 0):
             raise ValueError('Brightness must be between 0 and 255')
         result = True
@@ -253,7 +253,7 @@ class LEDBase(object):
 
 class LEDStrip(LEDBase):
 
-    def __init__(self, driver, threadedUpdate = False, masterBrightness=255, 
+    def __init__(self, driver, threadedUpdate = False, masterBrightness=255,
                  pixelWidth=1, masterBrightnessLimit=255):
         super(LEDStrip, self).__init__(driver, threadedUpdate, masterBrightness, masterBrightnessLimit)
 
@@ -350,9 +350,9 @@ class MultiMapBuilder():
 
 class LEDMatrix(LEDBase):
 
-    def __init__(self, driver, width = 0, height = 0, coordMap = None, 
-                 rotation = MatrixRotation.ROTATE_0, vert_flip = False, 
-                 serpentine = True, threadedUpdate = False, 
+    def __init__(self, driver, width = 0, height = 0, coordMap = None,
+                 rotation = MatrixRotation.ROTATE_0, vert_flip = False,
+                 serpentine = True, threadedUpdate = False,
                  masterBrightness=255, pixelSize=(1,1), masterBrightnessLimit=255):
         """Main class for matricies.
         driver - instance that inherits from DriverBase
@@ -800,13 +800,13 @@ class LEDMatrix(LEDBase):
 class LEDPOV(LEDMatrix):
 
     def __init__(self, driver, povHeight, width, rotation = MatrixRotation.ROTATE_0,
-                 vert_flip = False, threadedUpdate = False, 
+                 vert_flip = False, threadedUpdate = False,
                  masterBrightness=255, masterBrightnessLimit=255):
         self.numLEDs = povHeight * width
         # send keyword parameters as a few in LEDMatrix were skipped
-        super(LEDPOV, self).__init__(driver, width, povHeight, coordMap=None, 
-                rotation=rotation, vert_flip=vert_flip, 
-                threadedUpdate=threadedUpdate, masterBrightness=masterBrightness, 
+        super(LEDPOV, self).__init__(driver, width, povHeight, coordMap=None,
+                rotation=rotation, vert_flip=vert_flip,
+                threadedUpdate=threadedUpdate, masterBrightness=masterBrightness,
                 masterBrightnessLimit=masterBrightnessLimit)
 
     #This is the magic. Overriding the normal update() method
@@ -970,7 +970,15 @@ MANIFEST = [
                 "min": 1,
                 "default": 1,
                 "help":"Pixel scaling amount. Setting to >1 will make each logical pixel N LEDs in width."
-            },]
+            },{
+                "id": "masterBrightnessLimit",
+                "label": "Master Brightness Limit",
+                "type": "int",
+                "min": 1,
+                "max": 255,
+                "default": 255,
+                "help":"Master brightness limit for display, 0-255"
+            }]
         },
         {
             "id":"matrix",
@@ -1030,6 +1038,14 @@ MANIFEST = [
                 "max": 255,
                 "default": 255,
                 "help":"Master brightness for display, 0-255"
+            },{
+                "id": "masterBrightnessLimit",
+                "label": "Master Brightness Limit",
+                "type": "int",
+                "min": 1,
+                "max": 255,
+                "default": 255,
+                "help": "Master brightness limit for display, 0-255"
             },{
                 "id": "pixelSize",
                 "label": "Pixel Size",
