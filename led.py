@@ -199,7 +199,7 @@ class LEDBase(object):
             self.__scaleBrightness = 255
 
         if self.__scaleBrightness == 255:  # make both buffers same id
-            self.unscaledbuffer = self.buffer
+            self.buffer = self.unscaledbuffer
         else:  # self.unscaledbuffer made different id from self.buffer
             self.unscaledbuffer = [v for v in self.unscaledbuffer]
 
