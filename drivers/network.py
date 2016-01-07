@@ -62,7 +62,6 @@ class DriverNetwork(DriverBase):
 
             resp = ord(s.recv(1))
 
-            s.shutdown(socket.SHUT_RDWR)  # bb
             s.close()
 
             if resp != RETURN_CODES.SUCCESS:
@@ -75,24 +74,15 @@ class DriverNetwork(DriverBase):
             raise IOError(error)
 
     def setMasterBrightness(self, brightness):
-        try:
-            packet = self._generateHeader(CMDTYPE.BRIGHTNESS, 1)
-            packet.append(brightness)
-            s = self._connect()
-            s.sendall(packet)
-            resp = ord(s.recv(1))
-            s.shutdown(socket.SHUT_RDWR)  # bb
-            s.close()  # bb
-            if resp != RETURN_CODES.SUCCESS:
-                return False
-            else:
-                return True
-        except Exception as e:
-            log.logger.exception(e)
-            error = "Problem communicating with network receiver!"
-            log.logger.error(error)
-            raise IOError(error)
-
+        packet = self._generateHeader(CMDTYPE.BRIGHTNESS, 1)
+        packet.append(brightness)
+        s = self._connect()
+        s.sendall(packet)
+        resp = ord(s.recv(1))
+        if resp != RETURN_CODES.SUCCESS:
+            return False
+        else:
+            return True
 
 MANIFEST = [
         {

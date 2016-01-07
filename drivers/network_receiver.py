@@ -48,9 +48,6 @@ class ThreadedDataHandler(SocketServer.BaseRequestHandler):
                     if self.server.setBrightness(bright):
                         result = RETURN_CODES.SUCCESS
 
-                if self.server.hasFrame:
-                    while self.server.hasFrame(): pass
-
                 packet = bytearray()
                 packet.append(result)
                 self.request.sendall(packet)
