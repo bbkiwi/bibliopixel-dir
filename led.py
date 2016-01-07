@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 import colors
 import time
 import math
@@ -66,10 +66,6 @@ class LEDBase(object):
         self.buffer = [0 for x in range(self.bufByteCount)]
         self.unscaledbuffer = self.buffer
 
-        self.__masterBrightnessLimit = masterBrightnessLimit
-        self.masterBrightness = masterBrightness
-        self.__scaleBrightness = 255
-
         self._frameGenTime = 0
         self._frameTotalTime = None
 
@@ -81,7 +77,26 @@ class LEDBase(object):
                 t.start()
                 d._thread = t
 
-        self.setMasterBrightness(masterBrightness)
+        self.__masterBrightnessLimit = masterBrightnessLimit
+        # silently fix too big masterBrightness
+        try:
+            assert masterBrightness <= self.__masterBrightnessLimit
+        except AssertionError:
+            masterBrightness = self.__masterBrightnessLimit
+
+        self.masterBrightness = masterBrightness
+        self.driversHandleBrightness = True
+        for d in self.driver:
+            if(not d.setMasterBrightness(self.masterBrightness)):
+                self.driversHandleBrightness = False
+                break
+        # all or nothing, set them all back if False
+        if not self.driversHandleBrightness:
+            for d in self.driver:
+                d.setMasterBrightness(255)
+            self.__scaleBrightness = self.masterBrightness
+        else:
+            self.__scaleBrightness = 255
 
     def __enter__(self):
         return self
@@ -196,23 +211,12 @@ class LEDBase(object):
 
         if(bright > 255 or bright < 0):
             raise ValueError('Brightness must be between 0 and 255')
-            
-        # TODO could move this testing to separate routine to use
-        # in init    
-        result = True
-        for d in self.driver:
-            if(not d.setMasterBrightness(bright)):
-                result = False
-                break
 
-        # all or nothing, set them all back if False and use scaling
-        # if bright is less than 255
-        if not result:
-            for d in self.driver:
-                d.setMasterBrightness(255)
+        if not self.driversHandleBrightness:
             self.__scaleBrightness = bright
         else:
-            self.__scaleBrightness = 255
+            for d in self.driver:
+                d.setMasterBrightness(self.masterBrightness)
 
         if self.__scaleBrightness == 255:  # make both buffers same id
             self.buffer = self.unscaledbuffer

@@ -85,7 +85,6 @@ class BaseAnimation(object):
 
     def _run(self, amt, fps, sleep, max_steps, untilComplete, max_cycles):
         self.preRun()
-
         # calculate sleep time base on desired Frames per Second
         if fps is not None:
             sleep = int(1000 / fps)
@@ -262,14 +261,16 @@ class AnimationQueue(BaseAnimation):
     def run(self, amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = False, max_cycles = 0, threaded = False, joinThread = False, callback=None):
         self.fps = fps
         self.untilComplete = untilComplete
-        super(AnimationQueue, self).run(amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = untilComplete, max_cycles = 0, threaded = threaded, joinThread = joinThread, callback=callback)
+        self.max_cycles = max_cycles
+        super(AnimationQueue, self).run(amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = untilComplete, max_cycles = max_cycles, threaded = threaded, joinThread = joinThread, callback=callback)
 
     def step(self, amt=1):
         self.animIndex += 1
         if self.animIndex >= len(self.anims):
-            if self.untilComplete:
+            if self.untilComplete and self.max_cycles <= 1:
                 self.animComplete = True
             else:
+                self.max_cycles -= 1
                 self.animIndex = 0
 
         if not self.animComplete:
