@@ -199,19 +199,20 @@ class LEDBase(object):
             
         # TODO could move this testing to separate routine to use
         # in init    
-        result = True
+        allDriversSupportBrightness = True
         for d in self.driver:
             if(not d.setMasterBrightness(bright)):
-                result = False
+                allDriversSupportBrightness = False
                 break
 
         # all or nothing, set them all back if False and use scaling
         # if bright is less than 255
-        if not result:
+        if not allDriversSupportBrightness:
             for d in self.driver:
                 d.setMasterBrightness(255)
             self.__scaleBrightness = bright
         else:
+            print 'drivers being set'
             self.__scaleBrightness = 255
 
         if self.__scaleBrightness == 255:  # make both buffers same id
