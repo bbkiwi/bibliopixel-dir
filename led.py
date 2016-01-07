@@ -247,10 +247,10 @@ class LEDBase(object):
         """
         for i in range(self.bufByteCount):
             self.buffer[i] = 0
-	if self.buffer is self.unscaledbuffer:
-	    return
+        if self.buffer is self.unscaledbuffer:
+            return
         for i in range(self.bufByteCount):
-	    self.unscaledbuffer[i] = 0
+            self.unscaledbuffer[i] = 0
 
     # Fill the strand (or a subset) with a single color using a Color object
     def fill(self, color, start=0, end=-1):
