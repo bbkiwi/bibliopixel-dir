@@ -78,26 +78,22 @@ class LEDBase(object):
                 d._thread = t
 
         self.__masterBrightnessLimit = masterBrightnessLimit
-        # silently fix too big masterBrightness
-        try:
-            assert masterBrightness <= self.__masterBrightnessLimit
-        except AssertionError:
-            masterBrightness = self.__masterBrightnessLimit
-
         self.masterBrightness = masterBrightness
-        self.driversHandleBrightness = True
+        self.__allDriversHandleBrightness = True
         for d in self.driver:
             if(not d.setMasterBrightness(self.masterBrightness)):
-                self.driversHandleBrightness = False
+                self.__allDriversHandleBrightness = False
                 break
         # all or nothing, set them all back if False
-        if not self.driversHandleBrightness:
+        if not self.__allDriversHandleBrightness:
             for d in self.driver:
                 d.setMasterBrightness(255)
             self.__scaleBrightness = self.masterBrightness
         else:
             self.__scaleBrightness = 255
-
+        
+	self.setMasterBrightness(self.masterBrightness)
+	
     def __enter__(self):
         return self
 
@@ -204,6 +200,7 @@ class LEDBase(object):
         directly otherwise uses self.__scaleBrightness which is used to
         scale values that go in self.buffer
         """
+        # silently fix too big masterBrightness
         try:
             assert bright <= self.__masterBrightnessLimit
         except AssertionError:
@@ -212,9 +209,10 @@ class LEDBase(object):
         if(bright > 255 or bright < 0):
             raise ValueError('Brightness must be between 0 and 255')
 
-        if not self.driversHandleBrightness:
+        if not self.__allDriversHandleBrightness:
             self.__scaleBrightness = bright
         else:
+	    # self.__scaleBrightness remains 255
             for d in self.driver:
                 d.setMasterBrightness(self.masterBrightness)
 
