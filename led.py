@@ -91,9 +91,9 @@ class LEDBase(object):
             self.__scaleBrightness = self.masterBrightness
         else:
             self.__scaleBrightness = 255
-        
-	self.setMasterBrightness(self.masterBrightness)
-	
+
+        self.setMasterBrightness(self.masterBrightness)
+
     def __enter__(self):
         return self
 
@@ -212,7 +212,7 @@ class LEDBase(object):
         if not self.__allDriversHandleBrightness:
             self.__scaleBrightness = bright
         else:
-	    # self.__scaleBrightness remains 255
+        # self.__scaleBrightness remains 255
             for d in self.driver:
                 d.setMasterBrightness(self.masterBrightness)
 
