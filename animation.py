@@ -151,6 +151,7 @@ class BaseAnimation(object):
                     time.sleep(t)
             cur_step += 1
 
+        self.animComplete = True
         self.postRun()
 
         if self._callback:

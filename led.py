@@ -77,8 +77,12 @@ class LEDBase(object):
                 t.start()
                 d._thread = t
 
-        self.__masterBrightnessLimit = masterBrightnessLimit
-        self.masterBrightness = masterBrightness
+        # silently fix values over limits
+        self.__masterBrightnessLimit = min(masterBrightnessLimit, 255)
+        self.masterBrightness = min(masterBrightness, self.__masterBrightnessLimit)
+        
+        # determine if brightness control can be done via the drivers
+        #  if it can't self.__scaleBrightness will be used
         self.__allDriversHandleBrightness = True
         for d in self.driver:
             if(not d.setMasterBrightness(self.masterBrightness)):
@@ -93,6 +97,7 @@ class LEDBase(object):
             self.__scaleBrightness = 255
 
         self.setMasterBrightness(self.masterBrightness)
+        self.__masterBrightnessInitial = self.masterBrightness
 
     def __enter__(self):
         return self
@@ -191,26 +196,26 @@ class LEDBase(object):
 
     #Reset the master brightness for the LEDs to initialized value
     def resetMasterBrightness(self):
-        self.setMasterBrightness(self.masterBrightness)
+        self.setMasterBrightness(self.__masterBrightnessInitial)
 
     # Set the master brightness for the LEDs 0 - 255
-    def setMasterBrightness(self, bright):
+    def setMasterBrightness(self, brightness):
         """Sets the master brightness scaling, 0 - 255
         If the driver supports it the brightness will be sent to the receiver
         directly otherwise uses self.__scaleBrightness which is used to
         scale values that go in self.buffer
         """
-        # silently fix too big masterBrightness
-        try:
-            assert bright <= self.__masterBrightnessLimit
-        except AssertionError:
-            bright = self.__masterBrightnessLimit
-
-        if(bright > 255 or bright < 0):
+        if(brightness > 255 or brightness < 0):
             raise ValueError('Brightness must be between 0 and 255')
 
+        # silently fix too big masterBrightness
+        if brightness <= self.__masterBrightnessLimit:
+            self.masterBrightness = brightness
+        else:
+            self.masterBrightness = self.__masterBrightnessLimit
+
         if not self.__allDriversHandleBrightness:
-            self.__scaleBrightness = bright
+            self.__scaleBrightness = self.masterBrightness
         else:
         # self.__scaleBrightness remains 255
             for d in self.driver:
@@ -220,7 +225,7 @@ class LEDBase(object):
             self.buffer = self.unscaledbuffer
         else:  # self.unscaledbuffer made different id from self.buffer
             self.unscaledbuffer = [v for v in self.unscaledbuffer]
-
+  
     # Set single pixel to RGB value
     def setRGB(self, pixel, r, g, b):
         """Set single pixel using individual RGB values instead of tuple"""
