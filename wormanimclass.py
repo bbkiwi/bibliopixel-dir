@@ -17,6 +17,9 @@ class Worm(BaseStripAnim):
     height (of worm segments) is same length as colors: higher
     value worms segments go over top of lower value worms  
     Default is for worm on full strip
+    Note the worms state is not a direct function of self._step, but
+    rather self._headpostion which is initialized. So subsequent worm.run()
+    will start where a previous call to worm.run() finished. 
     """
     def __init__(self, led, colors, path=None, cyclelen=1, direction=1,
                  height=None, start=0, end=-1):
