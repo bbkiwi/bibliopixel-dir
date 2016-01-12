@@ -490,8 +490,8 @@ class MasterAnimation(BaseMatrixAnim):
     def __init__(self, led, animcopies, runtime=10, start=0, end=-1):
         super(MasterAnimation, self).__init__(led, start, end)
         # a replacement update function for animations in animcopies
-        def __update(self):
-           self._updatenow.set() 
+        #def __update(self):
+        #   self._updatenow.set() 
            
         if not isinstance(animcopies, list):
             animcopies = [animcopies]
@@ -499,10 +499,47 @@ class MasterAnimation(BaseMatrixAnim):
         # modify the update methods of led and add threading Event atribute
         self._ledcopies = []
         #self._restoreupdates = []
-        for a, f in self._animcopies:
+        for a, pixmap, pixheights, f in self._animcopies:
+            # TODO check that all the a have distinct ._led
             a._led._updatenow = threading.Event()
             #self._restoreupdates.append(a._led.update)
-            a._led.update = new.instancemethod(__update, a._led, None)
+            #a._led.update = new.instancemethod(__update, a._led, None)
+            
+            if pixmap is None and not hasattr(a._led, 'pixmap'):
+                a._led.pixmap = range(a._led.numLEDs)
+            else:
+                a._led.pixmap = pixmap  
+            try:          
+                if len(a._led.pixmap) != a._led.numLEDs:
+                    raise TypeError()                  
+            except TypeError:
+                err = 'pixmap must be list same size as LEDs'
+                log.logger.error(err)
+                raise TypeError
+                       
+            if pixheights is None and not hasattr(a._led, 'pixheights'):
+                a._led.pixheights = None
+            else:
+                a._led.pixheights = pixheights 
+                
+            err = 'pixheights must be list of values same size as LEDs'        
+            if a._led.pixheights == None:
+                a._led.pixheights = [0] * a._led.numLEDs
+            elif isinstance(a._led.pixheights ,list):
+                try:
+                    if len(pixheights) != a._led.numLEDs:
+                        raise TypeError()                  
+                except TypeError:
+                    log.logger.error(err)
+                    raise TypeError
+            else:
+                try:
+                    a._led.pixheights = [float(pixheights)] * a._led.numLEDs
+                except ValueError:
+                    err = 'pixheights must be list of values same size as LEDs'
+                    log.logger.error(err)
+                    raise ValueError            
+                
             self._ledcopies.append(a._led)
             
         self._runtime = runtime
@@ -513,7 +550,7 @@ class MasterAnimation(BaseMatrixAnim):
 
     #overriding to handle all the animations
     def stopThread(self, wait = False):
-        for w, f in self._animcopies:
+        for w, pm, ph, f in self._animcopies:
             w._stopEvent.set()
         super(MasterAnimation, self).stopThread(wait)
 
@@ -521,8 +558,8 @@ class MasterAnimation(BaseMatrixAnim):
     def preRun(self, amt=1):
         super(MasterAnimation, self).preRun(amt)
         self.starttime = time.time()
-        for w, f in self._animcopies:
-            w.run(fps=f, max_steps=self._runtime * f, threaded = True, updateWithPush=True)
+        for w, pm, ph, f in self._animcopies:
+            w.run(fps=f, max_steps=self._runtime * f, threaded = True, updateWithPush=False)
         #print "In preRUN THREADS: " + ",".join([re.sub('<class |,|bibliopixel.\w*.|>', '', str(s.__class__)) for s in threading.enumerate()])
 
     def preStep(self, amt=1):
@@ -530,7 +567,7 @@ class MasterAnimation(BaseMatrixAnim):
         self._idlelist = [True] # to insure goes thru while loop at least once
         while all(self._idlelist):
             self._idlelist = [not ledcopy._updatenow.isSet() for ledcopy in self._ledcopies]
-            if self._stopEvent.isSet() | all([a.stopped() for a, f in self._animcopies]):
+            if self._stopEvent.isSet() | all([a.stopped() for a, pm, ph, f in self._animcopies]):
                 self.animComplete = True
                 #print all([a.stopped() for a, f in self._animcopies])
                 #print 'breaking out'
@@ -562,14 +599,14 @@ class MasterAnimation(BaseMatrixAnim):
         for ledcopy in self._ledcopies:
             # self._led.buffer = map(ixor, self._led.buffer, ledcopy.buffer)
             # use pixheights but assume all buffers same size
-            # print ledcopy.driver[0].pixheights
-            for pixind, pix in enumerate(ledcopy.driver[0].pixmap):
-                if self._led.pixheights[pix] == ledcopy.driver[0].pixheights[pixind]:
+            # print ledcopy.pixheights
+            for pixind, pix in enumerate(ledcopy.pixmap):
+                if self._led.pixheights[pix] == ledcopy.pixheights[pixind]:
                     self._led._set_base(pix,
                             xortuple(self._led._get_base(pix), ledcopy._get_push(pixind)))
-                elif self._led.pixheights[pix] < ledcopy.driver[0].pixheights[pixind]:
+                elif self._led.pixheights[pix] < ledcopy.pixheights[pixind]:
                     self._led._set_base(pix, ledcopy._get_push(pixind))
-                    self._led.pixheights[pix] = ledcopy.driver[0].pixheights[pixind]
+                    self._led.pixheights[pix] = ledcopy.pixheights[pixind]
         self._step += 1
 
 
