@@ -507,7 +507,7 @@ class MasterAnimation(BaseMatrixAnim):
             
             if pixmap is None and not hasattr(a._led, 'pixmap'):
                 a._led.pixmap = range(a._led.numLEDs)
-            else:
+            elif pixmap is not None:
                 a._led.pixmap = pixmap  
             try:          
                 if len(a._led.pixmap) != a._led.numLEDs:
@@ -519,7 +519,7 @@ class MasterAnimation(BaseMatrixAnim):
                        
             if pixheights is None and not hasattr(a._led, 'pixheights'):
                 a._led.pixheights = None
-            else:
+            elif pixheights is not None:
                 a._led.pixheights = pixheights 
                 
             err = 'pixheights must be list of values same size as LEDs'        
