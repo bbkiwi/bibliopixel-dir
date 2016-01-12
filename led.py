@@ -307,8 +307,8 @@ class LEDStrip(LEDBase):
             self._set_base(p, color)
 
     def get(self, pixel):
-        """Get RGB color tuple of color at index pixel"""
-        return self._get_base(pixel)
+        """Get RGB color tuple of color at index (possibly scaled) pixel"""
+        return self._get_base(pixel * self.pixelWidth)
 
     #Set single pixel to RGB value
     def setRGB(self, pixel, r, g, b):
@@ -508,7 +508,7 @@ class LEDMatrix(LEDBase):
 
     def get(self, x, y):
         try:
-            pixel = self.matrix_map[y][x]
+            pixel = self.matrix_map[y * self.pixelSize[1]][x * self.pixelSize[0]]
             return self._get_base(pixel)
         except IndexError:
             return (0,0,0)
