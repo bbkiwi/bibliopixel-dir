@@ -9,6 +9,8 @@ import colors
 from util import d
 
 import threading
+import copy
+import new
 
 
 class animThread(threading.Thread):
@@ -83,7 +85,7 @@ class BaseAnimation(object):
         else:
             return True
 
-    def _run(self, amt, fps, sleep, max_steps, untilComplete, max_cycles):
+    def _run(self, amt, fps, sleep, max_steps, untilComplete, max_cycles, updateWithPush=True):
         self.preRun()
         # calculate sleep time base on desired Frames per Second
         if fps is not None:
@@ -119,7 +121,11 @@ class BaseAnimation(object):
             self._led._frameGenTime = int(mid - start)
             self._led._frameTotalTime = sleep
 
-            self._led.update()
+            if updateWithPush:
+                self._led.update()
+            else:
+                self._led._updatenow.set()   # signals masterAnimation to act
+                
             now = self._msTime()
 
             if self.animComplete and max_cycles > 0:
@@ -157,7 +163,7 @@ class BaseAnimation(object):
         if self._callback:
             self._callback(self)
 
-    def run(self, amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = False, max_cycles = 0, threaded = False, joinThread = False, callback=None):
+    def run(self, amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = False, max_cycles = 0, threaded = False, joinThread = False, callback=None, updateWithPush=True):
 
         self._threaded = threaded
         if self._threaded:
@@ -167,7 +173,7 @@ class BaseAnimation(object):
         if self._threaded:
             args = {}
             l = locals()
-            run_params = ["amt", "fps", "sleep", "max_steps", "untilComplete", "max_cycles"]
+            run_params = ["amt", "fps", "sleep", "max_steps", "untilComplete", "max_cycles", "updateWithPush"]
             for p in run_params:
                 if p in l:
                     args[p] = l[p]
@@ -176,7 +182,7 @@ class BaseAnimation(object):
             if joinThread:
                 self._thread.join()
         else:
-            self._run(amt, fps, sleep, max_steps, untilComplete, max_cycles)
+            self._run(amt, fps, sleep, max_steps, untilComplete, max_cycles, updateWithPush)
 
     RUN_PARAMS = [{
                 "id": "amt",
@@ -483,14 +489,27 @@ class MasterAnimation(BaseMatrixAnim):
     """
     def __init__(self, led, animcopies, runtime=10, start=0, end=-1):
         super(MasterAnimation, self).__init__(led, start, end)
+        # a replacement update function for animations in animcopies
+        def __update(self):
+           self._updatenow.set() 
+           
         if not isinstance(animcopies, list):
             animcopies = [animcopies]
         self._animcopies = animcopies
-        self._ledcopies = [a._led for a, f in animcopies]
+        # modify the update methods of led and add threading Event atribute
+        self._ledcopies = []
+        #self._restoreupdates = []
+        for a, f in self._animcopies:
+            a._led._updatenow = threading.Event()
+            #self._restoreupdates.append(a._led.update)
+            a._led.update = new.instancemethod(__update, a._led, None)
+            self._ledcopies.append(a._led)
+            
         self._runtime = runtime
         self._idlelist = []
-        self.timedata = [[] for _  in animcopies] # [[]] * k NOT define k different lists!
+        self.timedata = [[] for _  in self._animcopies] # [[]] * k NOT define k different lists!
         self._led.pixheights = [0] * self._led.numLEDs
+        
 
     #overriding to handle all the animations
     def stopThread(self, wait = False):
@@ -503,14 +522,14 @@ class MasterAnimation(BaseMatrixAnim):
         super(MasterAnimation, self).preRun(amt)
         self.starttime = time.time()
         for w, f in self._animcopies:
-            w.run(fps=f, max_steps=self._runtime * f, threaded = True)
+            w.run(fps=f, max_steps=self._runtime * f, threaded = True, updateWithPush=True)
         #print "In preRUN THREADS: " + ",".join([re.sub('<class |,|bibliopixel.\w*.|>', '', str(s.__class__)) for s in threading.enumerate()])
 
     def preStep(self, amt=1):
         # only step the master thread when something from ledcopies
         self._idlelist = [True] # to insure goes thru while loop at least once
         while all(self._idlelist):
-            self._idlelist = [not ledcopy.driver[0]._updatenow.isSet() for ledcopy in self._ledcopies]
+            self._idlelist = [not ledcopy._updatenow.isSet() for ledcopy in self._ledcopies]
             if self._stopEvent.isSet() | all([a.stopped() for a, f in self._animcopies]):
                 self.animComplete = True
                 #print all([a.stopped() for a, f in self._animcopies])
@@ -520,7 +539,7 @@ class MasterAnimation(BaseMatrixAnim):
     def postStep(self, amt=1):
         # clear the ones found in preStep
         activewormind = [i for i, x in enumerate(self._idlelist) if x == False]
-        [self._ledcopies[i].driver[0]._updatenow.clear() for i in activewormind]
+        [self._ledcopies[i]._updatenow.clear() for i in activewormind]
         #self.animComplete = all([a.stopped() for a, f in self._animcopies])
         #print "In postStep animComplete {}".format(self.animComplete)
 
