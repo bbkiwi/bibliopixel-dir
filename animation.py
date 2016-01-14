@@ -9,8 +9,6 @@ import colors
 from util import d
 
 import threading
-import copy
-import new
 
 
 class animThread(threading.Thread):
@@ -484,31 +482,77 @@ class MatrixCalibrationTest(BaseMatrixAnim):
 
 class MasterAnimation(BaseMatrixAnim):
     """
-    Takes copies of fake leds, combines using heights and mixing to fill and update
-    a led to run concurrent animations using threading
+    NOTE this version requires a modified BaseAnimation class
+    ma = MasterAnimation(ledmaster, animTracks, runtime=1)
+    Runs a number of animation tracks concurrently. 
+    animTracks is list of tuples
+          (animation with unique led, pixmap, pixheights, fps)
+    All the animations in animTracks will run for runtime. Each of the
+    animations, a, is mapped into ledmaster by its pixmap and conflicts 
+    resolved by pixheights.
+    For each tuple in animTracks consists of:
+       animation e.g. a = Wave(LEDStrip(Driver...(num ..), ...)
+           All of the animations in animTracks must have distince Drivers!
+           TODO fix this!
+           Any Driver should be ok. Specifying threaded=False is recommended
+              but it probably makes no difference. The updating is very
+              fast as it is only signally MasterAnimation to act. 
+       pixmap is list of size a._led.numLEDs of pixel indices of ledmaster
+         if pixmap is None, it will be replaced by range(a._led.numLEDs)
+       pixheights is list of size a._led.numLEDs of floats. Highest pixels
+         are the ones that display. In case of ties, xor is used
+         if pixheights is one value, pixheights is replaced by 
+         the constant list. If pixheights is None the constant is 0
+       fps a int or None for frames per second for this animation
+          
+    ma.run(fps=None, threaded=False) will run all the animiation tracks
+       concurrently and wait till the runtime is over.       
+    if fps is set faster frames from the tracks will be skipped. 
+   
+    if threaded is True is will not wait. 
+    To wait use:
+    while not masteranimation.stopped():
+        pass
     """
-    def __init__(self, led, animcopies, runtime=10, start=0, end=-1):
+    def __init__(self, led, animTracks, runtime=10, start=0, end=-1):
         super(MasterAnimation, self).__init__(led, start, end)
-        # a replacement update function for animations in animcopies
-        #def __update(self):
-        #   self._updatenow.set() 
+        
+        # Early idea but don't like breaking _led 
+        # XXX a replacement update function for animations in animTracks
+        # XXXdef __update(self):
+        # XXX   self._updatenow.set() 
            
-        if not isinstance(animcopies, list):
-            animcopies = [animcopies]
-        self._animcopies = animcopies
+        if not isinstance(animTracks, list):
+            animTracks = [animTracks]
+        self._animTracks = animTracks
         # modify the update methods of led and add threading Event atribute
         self._ledcopies = []
-        #self._restoreupdates = []
-        for a, pixmap, pixheights, f in self._animcopies:
-            # TODO check that all the a have distinct ._led
+        #XXX self._restoreupdates = []
+        
+        # for all animations' leds add attributes: _updatenow, pixmap, pixheights
+        ledcheck = set()
+        self.ledsunique = True
+        for a, pixmap, pixheights, f in self._animTracks:
+            # check that all the a have distinct ._led
+            # TODO make distince copies (deepcopy didn't work, if I could just find the
+            #   the defining arguments could make new instance)
+            if id(a._led) in ledcheck:
+                self.ledsunique = False
+                # TODO might only want a warning
+                raise RuntimeError('LEDs are not unique for the concurrent animations')
+            else:
+                ledcheck.add(id(a._led))
+                
             a._led._updatenow = threading.Event()
-            #self._restoreupdates.append(a._led.update)
-            #a._led.update = new.instancemethod(__update, a._led, None)
+            
+            #XXXself._restoreupdates.append(a._led.update)
+            #XXXa._led.update = new.instancemethod(__update, a._led, None)
             
             if pixmap is None and not hasattr(a._led, 'pixmap'):
                 a._led.pixmap = range(a._led.numLEDs)
             elif pixmap is not None:
                 a._led.pixmap = pixmap  
+                
             try:          
                 if len(a._led.pixmap) != a._led.numLEDs:
                     raise TypeError()                  
@@ -527,14 +571,14 @@ class MasterAnimation(BaseMatrixAnim):
                 a._led.pixheights = [0] * a._led.numLEDs
             elif isinstance(a._led.pixheights ,list):
                 try:
-                    if len(pixheights) != a._led.numLEDs:
+                    if len(a._led.pixheights) != a._led.numLEDs:
                         raise TypeError()                  
                 except TypeError:
                     log.logger.error(err)
                     raise TypeError
             else:
                 try:
-                    a._led.pixheights = [float(pixheights)] * a._led.numLEDs
+                    a._led.pixheights = [float(a._led.pixheights)] * a._led.numLEDs
                 except ValueError:
                     err = 'pixheights must be list of values same size as LEDs'
                     log.logger.error(err)
@@ -544,13 +588,13 @@ class MasterAnimation(BaseMatrixAnim):
             
         self._runtime = runtime
         self._idlelist = []
-        self.timedata = [[] for _  in self._animcopies] # [[]] * k NOT define k different lists!
+        self.timedata = [[] for _  in self._animTracks] # [[]] * k NOT define k different lists!
         self._led.pixheights = [0] * self._led.numLEDs
         
 
     #overriding to handle all the animations
     def stopThread(self, wait = False):
-        for w, pm, ph, f in self._animcopies:
+        for w, pm, ph, f in self._animTracks:
             w._stopEvent.set()
         super(MasterAnimation, self).stopThread(wait)
 
@@ -558,7 +602,7 @@ class MasterAnimation(BaseMatrixAnim):
     def preRun(self, amt=1):
         super(MasterAnimation, self).preRun(amt)
         self.starttime = time.time()
-        for w, pm, ph, f in self._animcopies:
+        for w, pm, ph, f in self._animTracks:
             w.run(fps=f, max_steps=self._runtime * f, threaded = True, updateWithPush=False)
         #print "In preRUN THREADS: " + ",".join([re.sub('<class |,|bibliopixel.\w*.|>', '', str(s.__class__)) for s in threading.enumerate()])
 
@@ -567,17 +611,17 @@ class MasterAnimation(BaseMatrixAnim):
         self._idlelist = [True] # to insure goes thru while loop at least once
         while all(self._idlelist):
             self._idlelist = [not ledcopy._updatenow.isSet() for ledcopy in self._ledcopies]
-            if self._stopEvent.isSet() | all([a.stopped() for a, pm, ph, f in self._animcopies]):
+            if self._stopEvent.isSet() | all([a.stopped() for a, pm, ph, f in self._animTracks]):
                 self.animComplete = True
-                #print all([a.stopped() for a, f in self._animcopies])
+                #print all([a.stopped() for a, f in self._animTracks])
                 #print 'breaking out'
                 break
 #
     def postStep(self, amt=1):
         # clear the ones found in preStep
-        activewormind = [i for i, x in enumerate(self._idlelist) if x == False]
-        [self._ledcopies[i]._updatenow.clear() for i in activewormind]
-        #self.animComplete = all([a.stopped() for a, f in self._animcopies])
+        activeanimind = [i for i, x in enumerate(self._idlelist) if x == False]
+        [self._ledcopies[i]._updatenow.clear() for i in activeanimind]
+        #self.animComplete = all([a.stopped() for a, f in self._animTracks])
         #print "In postStep animComplete {}".format(self.animComplete)
 
     def step(self, amt=1):
@@ -588,18 +632,14 @@ class MasterAnimation(BaseMatrixAnim):
         def xortuple(a, b):
             return tuple(a[i] ^ b[i] for i in range(len(a)))
         # For checking if all the animations have their frames looked at
-        #activewormind = [i for i, x in enumerate(self._idlelist) if x == False]
-        #print "Worm {} at {:5g}".format(activewormind, 1000*(time.time() - starttime))
-        # save times activated for each worm
+        #activeanimind = [i for i, x in enumerate(self._idlelist) if x == False]
+        #print "Anim {} at {:5g}".format(activeanimind, 1000*(time.time() - starttime))
+ 
+       # save times activated for each animation
         [self.timedata[i].append(1000*(time.time() - self.starttime)) for i, x in enumerate(self._idlelist) if x == False]
 
-        #self._led.buffer = [0] * 480
         self._led.pixheights = [-10000] * self._led.numLEDs
-        #print type(self._led.buffer)
         for ledcopy in self._ledcopies:
-            # self._led.buffer = map(ixor, self._led.buffer, ledcopy.buffer)
-            # use pixheights but assume all buffers same size
-            # print ledcopy.pixheights
             for pixind, pix in enumerate(ledcopy.pixmap):
                 if self._led.pixheights[pix] == ledcopy.pixheights[pixind]:
                     self._led._set_base(pix,
@@ -611,8 +651,6 @@ class MasterAnimation(BaseMatrixAnim):
 
 
     def run(self, amt = 1, fps=None, sleep=None, max_steps = 0, untilComplete = True, max_cycles = 0, threaded = True, joinThread = False, callback=None):
-        # self.fps = fps
-        # self.untilComplete = untilComplete
         super(MasterAnimation, self).run(amt = 1, fps=fps, sleep=None, max_steps = max_steps, untilComplete = untilComplete, max_cycles = 0, threaded = threaded, joinThread = joinThread, callback=callback)
 #        while not self.animComplete:
 #            pass
