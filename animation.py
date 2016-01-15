@@ -492,7 +492,8 @@ class MasterAnimation(BaseMatrixAnim):
     resolved by pixheights.
     For each tuple in animTracks consists of:
        animation e.g. a = Wave(LEDStrip(Driver...(num ..), ...)
-           All of the animations in animTracks must have distince Drivers!
+           All of the animations in animTracks must have distinct instances
+               of LEDStrip, LEDMatrix, ...!
            TODO fix this!
            Any Driver should be ok. Specifying threaded=False is recommended
               but it probably makes no difference. The updating is very
