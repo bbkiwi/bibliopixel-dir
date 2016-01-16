@@ -8,6 +8,7 @@ import colors
 
 from util import d
 
+import math
 import threading
 
 
@@ -85,9 +86,9 @@ class BaseAnimation(object):
 
     def _run(self, amt, fps, sleep, max_steps, untilComplete, max_cycles, updateWithPush=True):
         self.preRun()
-        # calculate sleep time base on desired Frames per Second
+        # calculate sleep time (ms) based on desired Frames per Second
         if fps is not None:
-            sleep = int(1000 / fps)
+            sleep = 1000.0 / fps
 
         initSleep = sleep
 
@@ -95,7 +96,8 @@ class BaseAnimation(object):
         cur_step = 0
         cycle_count = 0
         self.animComplete = False
-
+        
+        startupdate = self._msTime() # just to get started
         while not self._stopEvent.isSet() and (
                  (max_steps == 0 and not untilComplete) or
                  (max_steps > 0 and cur_step < max_steps) or
@@ -118,6 +120,26 @@ class BaseAnimation(object):
 
             self._led._frameGenTime = int(mid - start)
             self._led._frameTotalTime = sleep
+            
+            # sleep here so update starts on multiple of sleep time
+            # this will help synchronize concurrent animations
+            if sleep:
+                log.logger.warning("min - startupdate %dms  but sleep =  %dms!" % (mid - startupdate, sleep))
+                if mid - startupdate < sleep: # startupdate previous iteration
+                    framesTimeBegan = mid / sleep
+                    tsleep = (math.ceil(framesTimeBegan) - framesTimeBegan) * sleep
+                    #print framesTimeBegan, sleep, tsleep
+                    endcalc = self._msTime()
+                    if (endcalc - mid) < tsleep:
+                        if self._threaded:
+                            self._stopEvent.wait(tsleep / 1000.0)
+                        else:
+                            time.sleep(tsleep / 1000.0)            
+                else:
+                    diff = (self._msTime() - self._timeRef)
+                    log.logger.warning("Frame-time of %dms set, but took %dms!" % (sleep, diff))
+                          
+            startupdate = self._msTime()
 
             if updateWithPush:
                 self._led.update()
@@ -136,7 +158,7 @@ class BaseAnimation(object):
                 updateTime = int(self._led.lastThreadedUpdate())
                 totalTime = updateTime
             else:
-                updateTime = int(now - mid)
+                updateTime = int(now - startupdate)
                 totalTime = stepTime + updateTime
 
             if self._led._threadedUpdate:
@@ -144,15 +166,6 @@ class BaseAnimation(object):
             else:
                 log.logger.debug("{}ms/{}fps / Frame: {}ms / Update: {}ms".format(totalTime, int(1000 / max(totalTime,1)), stepTime, updateTime))
 
-            if sleep:
-                diff = (self._msTime() - self._timeRef)
-                t = max(0, (sleep - diff) / 1000.0)
-                if t == 0:
-                    log.logger.warning("Frame-time of %dms set, but took %dms!" % (sleep, diff))
-                if self._threaded:
-                    self._stopEvent.wait(t)
-                else:
-                    time.sleep(t)
             cur_step += 1
 
         self.animComplete = True
