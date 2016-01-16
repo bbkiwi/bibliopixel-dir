@@ -121,20 +121,32 @@ class BaseAnimation(object):
             self._led._frameGenTime = int(mid - start)
             self._led._frameTotalTime = sleep
             
-            # sleep here so update starts on multiple of sleep time
-            # this will help synchronize concurrent animations
+            # sleep here so update starts on  integer multiple of sleep time
+            #   since the time counter began
+            #   this will help synchronize concurrent animations
             if sleep:
-                log.logger.warning("min - startupdate %dms  but sleep =  %dms!" % (mid - startupdate, sleep))
+                # log.logger.warning("min - startupdate %dms  but sleep =  %dms!" % (mid - startupdate, sleep))
                 if mid - startupdate < sleep: # startupdate previous iteration
-                    framesTimeBegan = mid / sleep
-                    tsleep = (math.ceil(framesTimeBegan) - framesTimeBegan) * sleep
-                    #print framesTimeBegan, sleep, tsleep
+                    tsleep = sleep - (mid - startupdate)
+                    # apply correction to end on integer multiple
+                    nextstartupdate = startupdate + sleep
+                    framesTimeBegan = nextstartupdate / sleep
+                    framecorrection = round(framesTimeBegan) - framesTimeBegan
+                    tsleep = tsleep + framecorrection * sleep
+                    log.logger.info("time correction used %f ms   " % (framecorrection * sleep))
+                    # subtle correction to compensate for time of above calc
                     endcalc = self._msTime()
                     if (endcalc - mid) < tsleep:
                         if self._threaded:
                             self._stopEvent.wait(tsleep / 1000.0)
                         else:
-                            time.sleep(tsleep / 1000.0)            
+                            time.sleep(tsleep / 1000.0)        
+#                    # might be able to skip corrections and use this directly                     
+#                    if self._threaded:
+#                        self._stopEvent.wait(tsleep / 1000.0)
+#                    else:
+#                        time.sleep(tsleep / 1000.0)        
+#                
                 else:
                     diff = (self._msTime() - self._timeRef)
                     log.logger.warning("Frame-time of %dms set, but took %dms!" % (sleep, diff))
