@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 """
-Use version of DriverSlave that has pixmap and pixheights
-Runs a number of wave animations (threaded) so they are concurrent
+Use version of MasterAnimation that adds pixmap and pixheights attributes
+  to the led associated with the animations run concurrently
+  Runs a number of wave animations on 'strips' embedded in a matrix
 """
 # import base classes and driver
 from bibliopixel import LEDStrip, LEDMatrix
 from bibliopixel.drivers.LPD8806 import DriverLPD8806, ChannelOrder
 from bibliopixel.drivers.visualizer import DriverVisualizer, ChannelOrder
-from bibliopixel.drivers.slave_driver import DriverSlave
+from bibliopixel.drivers.dummy_driver import DriverDummy
 # import colors
 import bibliopixel.colors 
 from bibliopixel.animation import BaseStripAnim, BaseMatrixAnim, MasterAnimation
@@ -22,7 +23,7 @@ import BiblioPixelAnimations.matrix.bloom as BA
 import BiblioPixelAnimations.strip.Wave as WA
 import sys
 
-from bibliopixel.wormanimclass import pathgen
+from bibliopixel.tests.wormanimclass import pathgen
 # set up led with it's driver for the MasterAnimation
 try: # to use visualizer but if fails
     drivermaster = DriverVisualizer(160, pixelSize=62, stayTop=False, maxWindowWidth=1024)
@@ -56,17 +57,20 @@ wavedatalist = [(waveblue, wavebluepixmap, 5),
                 (wavecyan, wavecyanpixmap, 8),
                 (wavewhite, wavewhitepixmap, 9)]
 
-# dummy  LED strips must each have their own slavedrivers
-ledslaves = [LEDStrip(DriverSlave(len(sarg), pixmap=sarg, pixheights=-1), threadedUpdate=False) \
-             for aarg, sarg, fps in wavedatalist]
+# Each animation must have their own leds
+# ledlist is list of unique leds
+#   note DriverDummy is used here but any driver can be used as it is ignored
+ledlist = [LEDStrip(DriverDummy(len(sarg)), threadedUpdate=False, 
+                    masterBrightness=255) for aarg, sarg, fps in wavedatalist]
 
 # Make the animation list
-# Wave animations as list pairs (animation instances, fps) added
-animationlist = [(WA.Wave(ledslaves[i], *wd[0]), wd[2]) for i, wd in enumerate(wavedatalist)]
+# Worm animations as list tuple (animation instances, pixmap, pixheights, fps) added
+animationlist = [(WA.WaveMove(ledlist[i], *wd[0]), wd[1], -1, wd[2]) 
+                    for i, wd in enumerate(wavedatalist)]
 
 # needed to run on pixelweb     
 def genParams():
-    return {"start":0, "end":-1, "animcopies": animationlist}
+    return {"start":0, "end":-1, "animTracks": animationlist}
 
 if __name__ == '__main__':  
     masteranimation = MasterAnimation(ledmaster, animationlist, runtime=2)
