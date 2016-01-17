@@ -635,6 +635,9 @@ class MasterAnimation(BaseMatrixAnim):
     def preStep(self, amt=1):
         # only step the master thread when something from ledcopies
         self._idlelist = [True] # to insure goes thru while loop at least once
+        # TRIED THOUGHT MIGHT GIVE TIME TO CATCH NEARLY SIMULTANEOUS
+        # XX mintimelook = 50
+        # XX  now = self._msTime()
         while all(self._idlelist):
             self._idlelist = [not ledcopy._updatenow.isSet() for ledcopy in self._ledcopies]
             if self._stopEvent.isSet() | all([a.stopped() for a, pm, ph, f in self._animTracks]):
@@ -642,11 +645,16 @@ class MasterAnimation(BaseMatrixAnim):
                 #print all([a.stopped() for a, f in self._animTracks])
                 #print 'breaking out'
                 break
+#               XX if self._msTime() - now > mintimelook:
+#               XX     break
 #
     def postStep(self, amt=1):
         # clear the ones found in preStep
         activeanimind = [i for i, x in enumerate(self._idlelist) if x == False]
         [self._ledcopies[i]._updatenow.clear() for i in activeanimind]
+        ## try clearing all CAUSED SKIPPING      
+        # [ledcopy._updatenow.clear() for ledcopy in self._ledcopies]
+       
         #self.animComplete = all([a.stopped() for a, f in self._animTracks])
         #print "In postStep animComplete {}".format(self.animComplete)
 
