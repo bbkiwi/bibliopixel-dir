@@ -643,7 +643,9 @@ class MasterAnimation(BaseMatrixAnim):
                 #print 'breaking out'
                 break
         self.activeanimind = [i for i, x in enumerate(self._idlelist) if x == False]
-        # keep list of pixels changed by the active animations
+        # keep list of pixels in the active animations pixmaps
+        # TODO maybe - keep track of pixels that are actually changed
+        #    this would require looking at each animations step so costly
         self.activepixels = set()
         for i in self.activeanimind:
             self.activepixels = self.activepixels.union(set(self._ledcopies[i].pixmap))
@@ -671,7 +673,7 @@ class MasterAnimation(BaseMatrixAnim):
         for ledcopy in self._ledcopies:
             # deals with all the pixels from each animation
             #for pixind, pix in enumerate(ledcopy.pixmap):
-            # only deal with pixels that got changed
+            # only deal with pixels that possibly could have been changed
             active = ((pixind, pix) for pixind, pix in enumerate(ledcopy.pixmap) if pix in self.activepixels)
             for pixind, pix in active:
                 if self._led.pixheights[pix] == ledcopy.pixheights[pixind]:
