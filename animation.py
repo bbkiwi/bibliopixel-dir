@@ -669,9 +669,11 @@ class MasterAnimation(BaseMatrixAnim):
 
         self._led.pixheights = [-10000] * self._led.numLEDs
         for ledcopy in self._ledcopies:
+            # deals with all the pixels from each animation
             #for pixind, pix in enumerate(ledcopy.pixmap):
+            # only deal with pixels that got changed
             active = ((pixind, pix) for pixind, pix in enumerate(ledcopy.pixmap) if pix in self.activepixels)
-            for pixind, pix in active: # only deal with pixels that got changed
+            for pixind, pix in active:
                 if self._led.pixheights[pix] == ledcopy.pixheights[pixind]:
                     self._led._set_base(pix,
                             xortuple(self._led._get_base(pix), ledcopy._get_push(pixind)))
