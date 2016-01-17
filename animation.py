@@ -642,11 +642,15 @@ class MasterAnimation(BaseMatrixAnim):
                 #print all([a.stopped() for a, f in self._animTracks])
                 #print 'breaking out'
                 break
+        self.activeanimind = [i for i, x in enumerate(self._idlelist) if x == False]
+        # keep list of pixels changed by the active animations
+        self.activepixels = set()
+        for i in self.activeanimind:
+            self.activepixels = self.activepixels.union(set(self._ledcopies[i].pixmap))
 #
     def postStep(self, amt=1):
         # clear the ones found in preStep
-        activeanimind = [i for i, x in enumerate(self._idlelist) if x == False]
-        [self._ledcopies[i]._updatenow.clear() for i in activeanimind]
+        [self._ledcopies[i]._updatenow.clear() for i in self.activeanimind]
         #self.animComplete = all([a.stopped() for a, f in self._animTracks])
         #print "In postStep animComplete {}".format(self.animComplete)
 
@@ -658,15 +662,16 @@ class MasterAnimation(BaseMatrixAnim):
         def xortuple(a, b):
             return tuple(a[i] ^ b[i] for i in range(len(a)))
         # For checking if all the animations have their frames looked at
-        #activeanimind = [i for i, x in enumerate(self._idlelist) if x == False]
-        #print "Anim {} at {:5g}".format(activeanimind, 1000*(time.time() - starttime))
+        #print "Anim {} at {:5g}".format(self.activeanimind, 1000*(time.time() - starttime))
  
        # save times activated for each animation
         [self.timedata[i].append(1000*(time.time() - self.starttime)) for i, x in enumerate(self._idlelist) if x == False]
 
         self._led.pixheights = [-10000] * self._led.numLEDs
         for ledcopy in self._ledcopies:
-            for pixind, pix in enumerate(ledcopy.pixmap):
+            #for pixind, pix in enumerate(ledcopy.pixmap):
+            active = ((pixind, pix) for pixind, pix in enumerate(ledcopy.pixmap) if pix in self.activepixels)
+            for pixind, pix in active: # only deal with pixels that got changed
                 if self._led.pixheights[pix] == ledcopy.pixheights[pixind]:
                     self._led._set_base(pix,
                             xortuple(self._led._get_base(pix), ledcopy._get_push(pixind)))
