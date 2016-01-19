@@ -674,7 +674,9 @@ class MasterAnimation(BaseMatrixAnim):
             # deals with all the pixels from each animation
             #for pixind, pix in enumerate(ledcopy.pixmap):
             # only deal with pixels that possibly could have been changed
-            active = ((pixind, pix) for pixind, pix in enumerate(ledcopy.pixmap) if pix in self.activepixels)
+            # i.e in union of pixmap of activeanimations
+            active = ((pixind, pix) for pixind, pix in enumerate(ledcopy.pixmap) 
+                                    if pix in self.activepixels)
             for pixind, pix in active:
                 if self._led.pixheights[pix] == ledcopy.pixheights[pixind]:
                     self._led._set_base(pix,
