@@ -559,21 +559,19 @@ class MasterAnimation(BaseMatrixAnim):
         ledcheck = set()
         self.ledsunique = True
         for a, pixmap, pixheights, f in self._animTracks:
-            # check that all the a have distinct ._led
-            # TODO make distince copies (deepcopy didn't work, if I could just find the
-            #   the defining arguments could make new instance)
+            # make list of the distinct ._led used by the animation
+            #  and attach threading.Event() atribute to them
             if id(a._led) in ledcheck:
                 self.ledsunique = False
-                # TODO might only want a warning
-                raise RuntimeError('LEDs are not unique for the concurrent animations')
             else:
                 ledcheck.add(id(a._led))
-                
-            a._led._updatenow = threading.Event()
+                self._ledcopies.append(a._led)
+                a._led._updatenow = threading.Event()
             
             #XXXself._restoreupdates.append(a._led.update)
             #XXXa._led.update = new.instancemethod(__update, a._led, None)
-            
+            # note if two animation tracks use the same _led, the last
+            # will overwrite if not None
             if pixmap is None and not hasattr(a._led, 'pixmap'):
                 a._led.pixmap = range(a._led.numLEDs)
             elif pixmap is not None:
@@ -610,7 +608,7 @@ class MasterAnimation(BaseMatrixAnim):
                     log.logger.error(err)
                     raise ValueError            
                 
-            self._ledcopies.append(a._led)
+#            self._ledcopies.append(a._led)
             
         self._runtime = runtime
         self._idlelist = []
